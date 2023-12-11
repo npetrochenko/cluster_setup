@@ -1,0 +1,45 @@
+---
+ - name:  conf HAPROXY host1 host2
+   copy:
+     dest: /etc/haproxy/haproxy.cfg
+     content: |
+                 global
+                 maxconn 1500
+                 defaults
+                 log global
+                 mode tcp
+                 retries 2
+                 timeout client 30m
+                 timeout connect 4s
+                 timeout server 30m
+                 timeout check 5s
+                 listen stats
+                 mode http
+                 bind *:7000
+                 stats enable
+                 stats uri /
+                 listen postgres
+                 bind *:5000
+                 option httpchk
+                 http-check expect status 200
+                 default-server inter 3s fastinter 1s fall 2 rise 2 on-marked-down shutdown-sessions
+                 server {{ hostname1 }} {{ host1 }}:5432 maxconn 1400 check port 8008
+                 server {{ hostname2 }} {{ host2 }}:5432 maxconn 1400 check port 8008
+   delegate_to: "{{ item }}"
+   with_items:
+      - "{{ host1 }}"
+      - "{{ host2 }}"
+
+
+ - name: restart  HAPROXY  host1 host2
+   ansible.builtin.service:
+      name: haproxy
+      state: restarted
+   register: haproxyone
+   ignore_errors: yes
+   delegate_to: "{{ item }}"
+   with_items:
+      - "{{ host1 }}"
+      - "{{ host2 }}"
+ - debug:
+      var: haproxyone.stdout_lines

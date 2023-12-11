@@ -1,0 +1,167 @@
+---
+ - name: setting rsyslog
+   copy:
+      dest: /etc/rsyslog.d/10-keepalived.conf
+      content: |
+                  if $programname contains 'Keepalived' then /var/log/keepalived.log
+                  if $programname contains 'Keepalived' then stop
+
+ - name: setting logrotation
+   copy:
+      dest: /etc/logrotate.d/keepalived
+      content: |
+                  /var/log/keepalived.log  {
+                           weekly
+                           rotate 8
+                           compress
+                           delaycompress
+                           missingok
+                           notifempty
+                  }
+
+ - name: Stop service httpd, if started
+   ansible.builtin.service:
+          name: rsyslog
+          state: restarted
+
+ - name: conf KEEPALIVED host1
+   copy:
+      dest: /etc/keepalived/keepalived.conf
+      content: |
+
+                global_defs {
+
+                notification_email {
+                itmon@rncb.ru
+                root@localhost
+                }
+                ! Change email from on hostname01:
+                notification_email_from itmon@rncb.ru
+                router_id hostname01
+                script_user postgres
+                enable_script_security
+                vrrp_garp_master_refresh 30
+                vrrp_garp_master_refresh_repeat 2
+                }
+
+                !Script used to check if Nginx is running
+
+                vrrp_script check_haproxy {
+                script "pidof haproxy"
+                interval 2
+                fall 2
+                rise 2
+                weight 2
+                user postgres
+                }
+
+                vrrp_instance vrrp-example {
+                state MASTER
+                interface ens192
+                virtual_router_id 55
+                priority 103
+                advert_int 3
+
+                authentication {
+                auth_type PASS
+                auth_pass 1346
+                }
+
+                ! nopreempt
+                virtual_ipaddress {
+                {{ host4 }}/24 dev ens192 label ens192:vrrp
+                }
+                unicast_src_ip {{ host1 }}
+                unicast_peer {
+                {{  host2  }}
+                }
+                track_script {
+                check_haproxy
+                }
+                }
+
+   delegate_to: "{{ host1 }}"
+
+
+ - name: restart  KEEPALIVED  host1
+   ansible.builtin.service:
+      name: keepalived
+      state: restarted
+   register: keepalivedone
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+
+ - debug:
+      var: keepalivedone.stdout_lines
+
+
+
+ - name: KEEPALIVED   conf host2
+   copy:
+      dest: /etc/keepalived/keepalived.conf
+      content: |
+
+                global_defs {
+
+                notification_email {
+                itmon@rncb.ru
+                root@localhost
+                }
+
+                ! Change email from on hostname02:
+                notification_email_from itmon@rncb.ru
+                router_id hostname02
+
+                script_user postgres
+                enable_script_security
+                vrrp_garp_master_refresh 30
+                vrrp_garp_master_refresh_repeat 2
+                }
+
+                !Script used to check if Nginx is running
+
+                vrrp_script check_haproxy {
+                script "pidof haproxy"
+                interval 2
+                fall 2
+                rise 2
+                weight 2
+                user postgres
+                }
+
+                vrrp_instance vrrp-example {
+                state BACKUP
+                interface ens192
+                virtual_router_id 55
+                priority 102
+                advert_int 3
+
+                authentication {
+                auth_type PASS
+                auth_pass 1346
+                }
+
+                ! nopreempt
+                virtual_ipaddress {
+                {{  host4 }}/24 dev ens192 label ens192:vrrp
+                }
+                unicast_src_ip {{ host2 }}
+                unicast_peer {
+                {{  host1 }}
+                }
+                track_script {
+                check_haproxy
+                }
+                }
+
+   delegate_to: "{{ host2 }}"
+
+ - name: restart  keepalived  host2
+   ansible.builtin.service:
+      name: keepalived
+      state: restarted
+   register: keepalivedtwo
+   ignore_errors: yes
+   delegate_to: "{{ host2 }}"
+ - debug:
+      var: keepalivedtwo.stdout_lines

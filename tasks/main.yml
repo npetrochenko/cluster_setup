@@ -1,0 +1,21 @@
+---
+
+  - name: install_package_create_directory
+    import_tasks: install_package_create_directory.yml
+  
+  - name: generate cert
+    import_tasks: cert.yml
+  
+  - name: configure etcd
+    import_tasks: etcd.yml
+
+  - name: configure patroni
+    import_tasks: patroni.yml
+
+  - name: keepalived
+    import_tasks: keepalived.yml
+ 
+  - name: configure haproxy
+    import_tasks: haproxy.yml
+
+  

@@ -1,0 +1,180 @@
+---
+  - name:  conf Patroni host1
+    copy:
+      dest: /etc/patroni/patroni.yml
+      content: |
+                    scope: postgres
+                    namespace: /db/
+                    name: {{ hostname1 }}
+                    dir: /var/log/patroni
+                    restapi:
+                      listen: 0.0.0.0:8008
+                      connect_address: {{ host1 }}:8008
+                      authentication:
+                        username: patroni
+                        password: patroni
+
+                    etcd:
+                      hosts: {{ host1 }}:2379,{{host2}}:2379,{{host3}}:2379
+                      protocol: https
+                      cacert: /etc/pki/tls/certetcd/ca.pem
+                      cert: /etc/pki/tls/certetcd/client_patroni.pem
+                      key: /etc/pki/tls/certetcd/client_patroni-key.pem
+
+                    bootstrap:
+                      # and all other cluster members will use it as a global configuration
+                      dcs:
+                        ttl: 30
+                        loop_wait: 10
+                        retry_timeout: 10
+                        maximum_lag_on_failover: 1048576
+                        master_start_timeout: 300
+                        postgresql:
+                          use_pg_rewind: true
+                          use_slots: true
+                          parameters:
+                            hot_standby: "on"
+                            wal_keep_segments: 20
+                            max_wal_senders: 8
+                            max_replication_slots: 8
+                      # some desired options for 'initdb'
+                      initdb:  # Note: It needs to be a list (some options need values, others are switches)
+                      - auth-host: md5
+                      - auth-local: peer
+                      - encoding: UTF8
+                      - data-checksums
+                      - locale: ru_RU.UTF-8
+                      pg_hba:  # Add following lines to pg_hba.conf after running 'initdb'
+                      - host replication replicator 127.0.0.1/32 md5
+                      - host replication replicator {{host1}}/32 md5
+                      - host replication replicator {{host2}}/32 md5
+                      - host all all 0.0.0.0/0 md5
+                      # Additional script to be launched after initial cluster creation (
+                    # post_init: /usr/local/bin/setup_cluster.sh
+                      # Some additional users users which needs to be created after initializing new cluster
+                      users:
+                        dbadmin:
+                          password: dbpass
+                          options:
+                            - createrole
+                            - createdb
+                        postgreadmin:
+                          password: postgresql
+                          options:
+                            - createrole
+                            - createdb
+                    postgresql:
+                      listen: 0.0.0.0:5432
+                      connect_address: {{host1}}:5432
+                      data_dir: /srv/postgres/data
+                      config_dir: /srv/postgres/data
+                      bin_dir: /usr/pgsql-14/bin
+                      pgpass: /tmp/pgpass
+                      authentication:
+                        replication:
+                          username: replicator
+                          password: QAZWSX
+                        superuser:
+                          username: postgres
+                          password: QAZWSX
+                        rewind:
+                          username: rewind_user
+                          password: QAZWSX
+
+                    tags:
+                        nofailover: false
+                        noloadbalance: false
+                        clonefrom: false
+                        nosync: false
+
+    delegate_to: "{{ host1 }}"
+
+  - name: Patroni  conf host2
+    copy:
+      dest: /etc/patroni/patroni.yml
+      content: |
+              scope: postgres
+              namespace: /db/
+              name: {{ hostname2 }}
+              dir: /var/log/patroni
+              restapi:
+                listen: 0.0.0.0:8008
+                connect_address: {{host2}}:8008
+                authentication:
+                  username: patroni
+                  password: patroni
+
+              etcd:
+                hosts: {{host1}}:2379,{{host2}}:2379,{{host3}}:2379
+                protocol: https
+                cacert: /etc/pki/tls/certetcd/ca.pem
+                cert: /etc/pki/tls/certetcd/client_patroni.pem
+                key: /etc/pki/tls/certetcd/client_patroni-key.pem
+
+              bootstrap:
+                # and all other cluster members will use it as a global configuration
+                dcs:
+                  ttl: 30
+                  loop_wait: 10
+                  retry_timeout: 10
+                  maximum_lag_on_failover: 1048576
+                  master_start_timeout: 300
+                  postgresql:
+                    use_pg_rewind: true
+                    use_slots: true
+                    parameters:
+                      hot_standby: "on"
+                      wal_keep_segments: 20
+                      max_wal_senders: 8
+                      max_replication_slots: 8
+                # some desired options for 'initdb'
+                initdb:  # Note: It needs to be a list (some options need values, others are switches)
+                - auth-host: md5
+                - auth-local: peer
+                - encoding: UTF8
+                - data-checksums
+                - locale: ru_RU.UTF-8
+                pg_hba:  # Add following lines to pg_hba.conf after running 'initdb'
+                - host replication replicator 127.0.0.1/32 md5
+                - host replication replicator {{host1}}/32 md5
+                - host replication replicator {{host2}}/32 md5
+                - host all all 0.0.0.0/0 md5
+                # Additional script to be launched after initial cluster creation (
+              # post_init: /usr/local/bin/setup_cluster.sh
+                # Some additional users users which needs to be created after initializing new cluster
+                users:
+                  dbadmin:
+                    password: dbpass
+                    options:
+                      - createrole
+                      - createdb
+                  postgreadmin:
+                    password: postgresql
+                    options:
+                      - createrole
+                      - createdb
+              postgresql:
+                listen: 0.0.0.0:5432
+                connect_address: {{host2}}:5432
+                data_dir: /srv/postgres/data
+                config_dir: /srv/postgres/data
+                bin_dir: /usr/pgsql-14/bin
+                pgpass: /tmp/pgpass
+                authentication:
+                  replication:
+                    username: replicator
+                    password: QAZWSX
+                  superuser:
+                    username: postgres
+                    password: QAZWSX
+                  rewind:
+                    username: rewind_user
+                    password: QAZWSX
+
+              tags:
+                  nofailover: false
+                  noloadbalance: false
+                  clonefrom: false
+                  nosync: false
+
+    delegate_to: "{{ host2 }}"

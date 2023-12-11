@@ -1,0 +1,333 @@
+---
+  - name: сreate directory 
+    file:
+      path: "{{ item }}"
+      state: directory
+    with_items:
+     - '/etc/pki/tls/certetcd'
+     - '/etc/patroni/'
+
+  - name: Def conf cfssl
+    ansible.builtin.shell:
+      cmd: |
+          cfssl print-defaults config > ca-config.json
+          cfssl print-defaults csr > ca-csr.json
+    args:
+        chdir: /etc/pki/tls/certetcd
+    delegate_to: "{{ host0 }}"
+
+
+  - name: Create cert
+    copy:
+      dest: /etc/pki/tls/certetcd/ca-config.json
+      content: |
+                  {
+                    "signing": {
+                    "default": {
+                      "expiry": "87658h"
+                      },
+                      "profiles": {
+                            "server": {
+                              "expiry": "87658h",
+                              "usages": [
+                                "signing",
+                                "key encipherment",
+                                "server auth"
+                                ]
+                          },
+                          "client": {
+                            "expiry": "87658h",
+                              "usages": [
+                              "signing",
+                              "key encipherment",
+                              "client auth"
+                                ]
+                          },
+                          "peer": {
+                              "expiry": "87658h",
+                          "usages": [
+                                "signing",
+                                "key encipherment",
+                                "server auth",
+                                "client auth"
+                                  ]
+                              }
+                            }
+                          }
+                        }
+    delegate_to: "{{ host0 }}"
+
+  - name: Create cert server1
+    ansible.builtin.shell:
+      cmd: cfssl gencert -initca ca-csr.json | cfssljson -bare ca - && cfssl print-defaults csr > server1.json
+    args:
+        chdir: /etc/pki/tls/certetcd/
+
+    delegate_to: "{{ host0 }}"
+  - name: Create cert server1
+    copy:
+      dest: /etc/pki/tls/certetcd/server1.json
+      content: |
+
+                    {
+                        "CN": "etcd1",
+                        "hosts": [
+                              "{{ host1 }}"
+                                ],
+                            "key": {
+                            "algo": "ecdsa",
+                            "size": 256
+                        },
+                        "names": [
+                            {
+                              "C": "RU",
+                              "L": "CA",
+                              "ST": "Simferopol"
+                            }
+                          ]
+                      }
+
+
+    delegate_to: "{{ host0 }}"
+
+  - name: Create cert server2
+    copy:
+      dest: /etc/pki/tls/certetcd/server2.json
+      content: |
+
+                  {
+                      "CN": "etcd2",
+                      "hosts": [
+                            "{{ host2 }}"
+                                ],
+                          "key": {
+                          "algo": "ecdsa",
+                          "size": 256
+                      },
+                      "names": [
+                          {
+                              "C": "RU",
+                              "L": "CA",
+                              "ST": "Simferopol"
+                            }
+                        ]
+                    }
+    delegate_to: "{{ host0 }}"
+
+  - name: Create cert server3
+    copy:
+      dest: /etc/pki/tls/certetcd/server3.json
+      content: |
+
+                  {
+                      "CN": "etcd3",
+                      "hosts": [
+                            "{{ host3 }}"
+                                ],
+                          "key": {
+                          "algo": "ecdsa",
+                          "size": 256
+                      },
+                      "names": [
+                          {
+                              "C": "RU",
+                              "L": "CA",
+                              "ST": "Simferopol"
+                            }
+                        ]
+                    }
+
+    delegate_to: "{{ host0 }}"
+
+
+  - name: Create cert server1
+    ansible.builtin.shell:
+        cmd : |
+          cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=server server1.json | cfssljson -bare server1
+          cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=server server2.json | cfssljson -bare server2
+          cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=server server3.json | cfssljson -bare server3
+    args:
+        chdir: /etc/pki/tls/certetcd/
+    delegate_to: "{{ host0 }}"
+
+  - name: Create client json
+    copy:
+      dest: /etc/pki/tls/certetcd/client.json
+      content: |
+
+                  {
+                        "CN": "root",
+                        "key": {
+                        "algo": "ecdsa",
+                        "size": 256
+                          }
+                  }
+    delegate_to: "{{ host0 }}"
+
+
+  - name: Create client patroni json
+    copy:
+      dest: /etc/pki/tls/certetcd/client_patroni.json
+      content: |
+
+                  {
+                        "CN": "root_patroni",
+                        "key": {
+                        "algo": "ecdsa",
+                        "size": 256
+                          }
+                  }
+
+    delegate_to: "{{ host0 }}"
+
+  - name: Create client cert
+    ansible.builtin.shell:
+        cmd : |
+          cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=client client.json | cfssljson -bare client
+          cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=client client_patroni.json | cfssljson -bare client_patroni
+    args:
+        chdir: /etc/pki/tls/certetcd/
+    delegate_to: "{{ host0 }}"
+
+  - name: Cert peer to peer member1
+    copy:
+      dest: /etc/pki/tls/certetcd/member1.json
+      content: |
+                  {
+
+                      "CN": "etcd1",
+                      "hosts": [
+                      "{{ host1 }}"
+                      ],
+                      "key": {
+                      "algo": "ecdsa",
+                      "size": 256
+
+                        },
+
+                      "names": [
+                      {
+                      "C": "RU",
+                      "L": "CA",
+                    "ST": "Simferopol"
+                      }
+                      ]
+                    }
+    delegate_to: "{{ host0 }}"
+
+  - name: Cert peer to peer member2
+    copy:
+      dest: /etc/pki/tls/certetcd/member2.json
+      content: |
+
+                  {
+
+                      "CN": "etcd2",
+                      "hosts": [
+                      "{{ host2 }}"
+                      ],
+                      "key": {
+                      "algo": "ecdsa",
+                      "size": 256
+
+                        },
+
+                      "names": [
+                      {
+                      "C": "RU",
+                      "L": "CA",
+                    "ST": "Simferopol"
+                      }
+                      ]
+                    }
+    delegate_to: "{{ host0 }}"
+
+
+  - name: Cert peer to peer member3
+    copy:
+      dest: /etc/pki/tls/certetcd/member3.json
+      content: |
+
+                  {
+
+                      "CN": "etcd3",
+                      "hosts": [
+                      "{{ host3 }}"
+                      ],
+                      "key": {
+                      "algo": "ecdsa",
+                      "size": 256
+
+                        },
+
+                      "names": [
+                      {
+                      "C": "RU",
+                      "L": "CA",
+                    "ST": "Simferopol"
+                      }
+                      ]
+                    }
+
+    delegate_to: "{{ host0 }}"
+
+  - name: Create cert server1
+    ansible.builtin.shell:
+        cmd: cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=peer member1.json | cfssljson -bare member1 && cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=peer member2.json | cfssljson -bare member2 && cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=peer member3.json | cfssljson -bare member3
+
+    args:
+        chdir: /etc/pki/tls/certetcd/
+    ignore_errors: yes
+    delegate_to: "{{ host0 }}"
+
+  - name: copy package host1
+    ansible.builtin.copy:
+      src: "{{ item }}"
+      dest: /etc/pki/tls/certetcd
+    with_items:
+      - "/etc/pki/tls/certetcd/server1.pem"
+      - "/etc/pki/tls/certetcd/member1.pem"
+      - "/etc/pki/tls/certetcd/member1-key.pem"
+      - "/etc/pki/tls/certetcd/server1-key.pem"
+      - "/etc/pki/tls/certetcd/ca.pem"
+      - "/etc/pki/tls/certetcd/ca-key.pem"
+      - "/etc/pki/tls/certetcd/client.pem"
+      - "/etc/pki/tls/certetcd/client-key.pem"
+      - "/etc/pki/tls/certetcd/client_patroni.pem"
+      - "/etc/pki/tls/certetcd/client_patroni-key.pem"
+    delegate_to: "{{ host1 }}"
+
+  - name: copy package host2
+    ansible.builtin.copy:
+      src: "{{ item }}"
+      dest: /etc/pki/tls/certetcd
+    with_items:
+      - "/etc/pki/tls/certetcd/server2.pem"
+      - "/etc/pki/tls/certetcd/member2.pem"
+      - "/etc/pki/tls/certetcd/member2-key.pem"
+      - "/etc/pki/tls/certetcd/server2-key.pem"
+      - "/etc/pki/tls/certetcd/ca.pem"
+      - "/etc/pki/tls/certetcd/ca-key.pem"
+      - "/etc/pki/tls/certetcd/client.pem"
+      - "/etc/pki/tls/certetcd/client-key.pem"
+      - "/etc/pki/tls/certetcd/client_patroni.pem"
+      - "/etc/pki/tls/certetcd/client_patroni-key.pem"
+    delegate_to: "{{ host2 }}"
+
+  - name: copy package host3
+    ansible.builtin.copy:
+      src: "{{ item }}"
+      dest: /etc/pki/tls/certetcd
+    with_items:
+      - "/etc/pki/tls/certetcd/server3.pem"
+      - "/etc/pki/tls/certetcd/member3.pem"
+      - "/etc/pki/tls/certetcd/member3-key.pem"
+      - "/etc/pki/tls/certetcd/server3-key.pem"
+      - "/etc/pki/tls/certetcd/ca.pem"
+      - "/etc/pki/tls/certetcd/ca-key.pem"
+      - "/etc/pki/tls/certetcd/client.pem"
+      - "/etc/pki/tls/certetcd/client-key.pem"
+      - "/etc/pki/tls/certetcd/client_patroni.pem"
+      - "/etc/pki/tls/certetcd/client_patroni-key.pem"
+    delegate_to: "{{ host3 }}"
+

@@ -1,0 +1,9 @@
+--- 
+  host0: 127.0.0.1
+  host1: 10.186.10.22
+  host2: 10.186.10.23
+  host3: 10.186.10.24
+  host4: 10.186.10.26
+  hostname1: free-ipa-patroni-db-1
+  hostname2: free-ipa-patroni-db-2
+  hostname3: free-ipa-patroni-db-3

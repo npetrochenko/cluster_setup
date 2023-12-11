@@ -1,0 +1,292 @@
+---
+ - name: сreate directory 
+   file:
+     path: "{{ item }}"
+     state: directory
+   with_items:
+     - '/etc/pki/tls/certetcd'
+     - '/etc/patroni/'
+
+
+ - name: extradite rigth
+   ansible.builtin.shell:
+       cmd : |
+          chown etcd:etcd /etc/pki/tls/certetcd
+          chmod 755 /etc/pki/tls/certetcd
+          chown etcd:etcd /etc/pki/tls/certetcd/*
+          chmod 664 /etc/pki/tls/certetcd/*
+
+ 
+ - name: Etcd conf host1
+   copy:
+      dest: /etc/etcd/etcd.conf
+      content: |
+                   # [member]
+                   ETCD_NAME={{ hostname1 }}
+                   ETCD_DATA_DIR="/var/lib/etcd/"
+                   ETCD_LISTEN_PEER_URLS="https://{{ host1 }}:2380"
+                   ETCD_LISTEN_CLIENT_URLS="https://{{ host1 }}:2379,https://127.0.0.1:2379"
+
+                   #[cluster]
+                   ETCD_INITIAL_ADVERTISE_PEER_URLS="https://{{ host1 }}:2380"
+                   ETCD_INITIAL_CLUSTER="{{ hostname1 }}=https://{{ host1 }}:2380"
+                   ETCD_INITIAL_CLUSTER_STATE="new"
+                   ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-1"
+                   ETCD_ADVERTISE_CLIENT_URLS="https://{{ host1 }}:2379"
+
+                   #[Security]
+                   ETCD_CERT_FILE="/etc/pki/tls/certetcd/server1.pem"
+                   ETCD_KEY_FILE="/etc/pki/tls/certetcd/server1-key.pem"
+                   ETCD_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+                   ETCD_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_CERT_FILE="/etc/pki/tls/certetcd/member1.pem"
+                   ETCD_PEER_KEY_FILE="/etc/pki/tls/certetcd/member1-key.pem"
+                   ETCD_PEER_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+
+   delegate_to: "{{ host1 }}"
+
+ - name: restart etcd host1
+   ansible.builtin.service:
+      name: etcd
+      state: started
+   register: restart
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+       var: restart.stdout_lines
+   delegate_to: "{{ host1 }}"
+
+
+ - name: pause
+   pause:
+      seconds: 10
+
+
+
+ - name: ADD  etcdctl member host2
+   ansible.builtin.shell:
+     cmd : etcdctl --endpoints=https://{{ host1 }}:2379 --ca-file=/etc/pki/tls/certetcd/ca.pem  --cert-file=/etc/pki/tls/certetcd/member1.pem --key-file=/etc/pki/tls/certetcd/member1-key.pem member add {{ hostname2 }} https://{{host2}}:2380
+   register: add
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+      var: add.stdout_lines
+
+
+ - name: status etcd host1
+   ansible.builtin.shell:
+     cmd: systemctl status  etcd
+   register: status
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+      var: status.stdout_lines
+
+
+
+ - name: conf etcd host2
+   copy:
+     dest: /etc/etcd/etcd.conf
+     content: |
+
+                   # [member]
+                   ETCD_NAME={{ hostname2 }}
+                   ETCD_DATA_DIR="/var/lib/etcd/"
+                   ETCD_LISTEN_PEER_URLS="https://{{ host2 }}:2380"
+                   ETCD_LISTEN_CLIENT_URLS="https://{{ host2 }}:2379,https://127.0.0.1:2379"
+
+                   #[cluster]
+                   ETCD_INITIAL_ADVERTISE_PEER_URLS="https://{{ host2 }}:2380"
+                   ETCD_INITIAL_CLUSTER="{{ hostname1 }}=https://{{ host1 }}:2380,{{ hostname2 }}=https://{{ host2 }}:2380"
+                   ETCD_INITIAL_CLUSTER_STATE="existing"
+
+                   ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-1"
+                   ETCD_ADVERTISE_CLIENT_URLS="https://{{ host2 }}:2379"
+                   #[Security]
+                   ETCD_CERT_FILE="/etc/pki/tls/certetcd/server2.pem"
+                   ETCD_KEY_FILE="/etc/pki/tls/certetcd/server2-key.pem"
+                   ETCD_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+                   ETCD_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_CERT_FILE="/etc/pki/tls/certetcd/member2.pem"
+                   ETCD_PEER_KEY_FILE="/etc/pki/tls/certetcd/member2-key.pem"
+                   ETCD_PEER_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+
+   delegate_to: "{{ host2 }}"
+
+
+
+
+ - name: restart  etcd host2
+   ansible.builtin.service:
+      name: etcd
+      state: started
+   delegate_to: "{{ host2 }}"
+ - debug:
+      var: status.stdout_lines
+
+
+# ADD HOST3 ALARMA
+
+
+
+ - name: ADD 3  etcdctl member host3
+   ansible.builtin.shell:
+     cmd : etcdctl --endpoints=https://{{ host1 }}:2379 --ca-file=/etc/pki/tls/certetcd/ca.pem  --cert-file=/etc/pki/tls/certetcd/member1.pem --key-file=/etc/pki/tls/certetcd/member1-key.pem member add {{ hostname3 }} https://{{host3}}:2380
+   register: add
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+      var: add.stdout_lines
+
+ - name: status etcd host1
+   ansible.builtin.shell:
+     cmd: systemctl status  etcd
+   register: status
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+      var: status.stdout_lines
+
+ - name: conf etcd host3
+   copy:
+      dest: /etc/etcd/etcd.conf
+      content: |
+
+                   # [member]
+                   ETCD_NAME={{ hostname3 }} 
+                   ETCD_DATA_DIR="/var/lib/etcd/"
+                   ETCD_LISTEN_PEER_URLS="https://{{ host3 }}:2380"
+                   ETCD_LISTEN_CLIENT_URLS="https://{{ host3 }}:2379,https://127.0.0.1:2379"
+
+                   #[cluster]
+                   ETCD_INITIAL_ADVERTISE_PEER_URLS="https://{{ host3 }}:2380"
+
+                   ETCD_INITIAL_CLUSTER="{{ hostname1 }}=https://{{ host1 }}:2380,{{ hostname2 }}=https://{{ host2 }}:2380,{{ hostname3 }}=https://{{ host3 }}:2380"
+                   ETCD_INITIAL_CLUSTER_STATE="existing"
+
+                   ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-1"
+                   ETCD_ADVERTISE_CLIENT_URLS="https://{{ host3 }}:2379"
+                   #[Security]
+                   ETCD_CERT_FILE="/etc/pki/tls/certetcd/server3.pem"
+                   ETCD_KEY_FILE="/etc/pki/tls/certetcd/server3-key.pem"
+                   ETCD_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+                   ETCD_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_CERT_FILE="/etc/pki/tls/certetcd/member3.pem"
+                   ETCD_PEER_KEY_FILE="/etc/pki/tls/certetcd/member3-key.pem"
+                   ETCD_PEER_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+
+   delegate_to: "{{ host3 }}"
+
+
+
+
+ - name: restart  etcd host3
+   ansible.builtin.service:
+      name: etcd
+      state: started
+   register: status
+   ignore_errors: yes
+   delegate_to: "{{ host3 }}"
+ - debug:
+      var: status.stdout_lines
+
+
+
+####    EXISTING HOST1
+
+
+ - name: conf existing etcd host1
+   copy:
+      dest: /etc/etcd/etcd.conf
+      content: |
+
+                   # [member]
+                   ETCD_NAME={{ hostname1 }}
+                   ETCD_DATA_DIR="/var/lib/etcd/"
+                   ETCD_LISTEN_PEER_URLS="https://{{ host1 }}:2380"
+                   ETCD_LISTEN_CLIENT_URLS="https://{{ host1 }}:2379,https://127.0.0.1:2379"
+
+                   #[cluster]
+                   ETCD_INITIAL_ADVERTISE_PEER_URLS="https://{{ host1 }}:2380"
+                   ETCD_INITIAL_CLUSTER="{{ hostname1 }}=https://{{ host1 }}:2380,{{ hostname2 }}=https://{{ host2 }}:2380,{{ hostname3 }}=https://{{ host3 }}:2380"
+                   ETCD_INITIAL_CLUSTER_STATE="existing"
+
+                   ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-1"
+                   ETCD_ADVERTISE_CLIENT_URLS="https://{{ host1 }}:2379"
+                   #[Security]
+                   ETCD_CERT_FILE="/etc/pki/tls/certetcd/server1.pem"
+                   ETCD_KEY_FILE="/etc/pki/tls/certetcd/server1-key.pem"
+                   ETCD_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+                   ETCD_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_CERT_FILE="/etc/pki/tls/certetcd/member1.pem"
+                   ETCD_PEER_KEY_FILE="/etc/pki/tls/certetcd/member1-key.pem"
+                   ETCD_PEER_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+
+   delegate_to: "{{ host1 }}"
+
+
+
+
+ - name: restart  etcd host1
+   ansible.builtin.service:
+      name: etcd
+      state: restarted
+   register: status
+   ignore_errors: yes
+   delegate_to: "{{ host1 }}"
+ - debug:
+      var: status.stdout_lines
+
+
+ - name: pause
+   pause:
+       seconds: 5
+
+
+##### HOST 2 ALL CONF
+
+ - name: conf etcd host1
+   copy:
+      dest: /etc/etcd/etcd.conf
+      content: |
+
+                   # [member]
+                   ETCD_NAME={{ hostname2 }}
+                   ETCD_DATA_DIR="/var/lib/etcd/"
+                   ETCD_LISTEN_PEER_URLS="https://{{ host2 }}:2380"
+                   ETCD_LISTEN_CLIENT_URLS="https://{{ host2 }}:2379,https://127.0.0.1:2379"
+
+                   #[cluster]
+                   ETCD_INITIAL_ADVERTISE_PEER_URLS="https://{{ host2 }}:2380"
+
+                   ETCD_INITIAL_CLUSTER="{{ hostname1 }}=https://{{ host1 }}:2380,{{ hostname2 }}=https://{{ host2 }}:2380,{{ hostname3 }}=https://{{ host3 }}:2380"
+                   ETCD_INITIAL_CLUSTER_STATE="existing"
+
+                   ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster-1"
+                   ETCD_ADVERTISE_CLIENT_URLS="https://{{ host2 }}:2379"
+                   #[Security]
+                   ETCD_CERT_FILE="/etc/pki/tls/certetcd/server2.pem"
+                   ETCD_KEY_FILE="/etc/pki/tls/certetcd/server2-key.pem"
+                   ETCD_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+                   ETCD_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_CERT_FILE="/etc/pki/tls/certetcd/member2.pem"
+                   ETCD_PEER_KEY_FILE="/etc/pki/tls/certetcd/member2-key.pem"
+                   ETCD_PEER_CLIENT_CERT_AUTH="true"
+                   ETCD_PEER_TRUSTED_CA_FILE="/etc/pki/tls/certetcd/ca.pem"
+
+   delegate_to: "{{ host2 }}"
+
+
+ - name: restart  etcd host2
+   ansible.builtin.service:
+      name: etcd
+      state: restarted
+   register: status
+   ignore_errors: yes
+   delegate_to: "{{ host2 }}"
+ - debug:
+      var: status.stdout_lines
